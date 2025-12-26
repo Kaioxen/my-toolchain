@@ -5,7 +5,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout
@@ -14,35 +14,30 @@ jobs:
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build \
-            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
-            binutils-aarch64-linux-gnu xz-utils
+          sudo apt-get install -y cmake ninja-build gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu xz-utils
 
       - name: Download LLVM 9 Source
         run: |
-          # Menggunakan link resmi LLVM releases
           wget https://releases.llvm.org/9.0.0/llvm-9.0.0.src.tar.xz
           wget https://releases.llvm.org/9.0.0/cfe-9.0.0.src.tar.xz
-          
           tar -xf llvm-9.0.0.src.tar.xz
           tar -xf cfe-9.0.0.src.tar.xz
-          
-          # Pindahkan Clang (cfe) ke dalam folder tools LLVM
-          mv cfe-9.0.0.src llvm-9.0.0.src/tools/clang
+          mv cfe-9.0.0.src clang
 
       - name: Configure CMake
         run: |
           mkdir build && cd build
           cmake -G Ninja ../llvm-9.0.0.src \
             -DCMAKE_BUILD_TYPE=Release \
+            -DLLVM_ENABLE_PROJECTS="clang" \
             -DLLVM_TARGETS_TO_BUILD="AArch64" \
             -DLLVM_DEFAULT_TARGET_TRIPLE=aarch64-linux-gnu \
             -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
             -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
-            -DLLVM_ENABLE_PROJECTS="clang" \
             -DLLVM_INCLUDE_TESTS=OFF \
             -DLLVM_INCLUDE_EXAMPLES=OFF \
-            -DCMAKE_INSTALL_PREFIX=../clang9_aarch64_dist
+            -DLLVM_ENABLE_BACKTRACES=OFF \
+            -DCMAKE_INSTALL_PREFIX=../install_dir
 
       - name: Build and Install
         run: |
@@ -52,8 +47,8 @@ jobs:
 
       - name: Archive Binaries
         run: |
-          # Kompres hasil build agar mudah di download
-          tar -czvf clang9-aarch64.tar.gz clang9_aarch64_dist/
+          cd install_dir
+          tar -czvf ../clang9-aarch64.tar.gz .
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
