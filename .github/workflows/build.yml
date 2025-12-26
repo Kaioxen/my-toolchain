@@ -1,64 +1,54 @@
-name: Toolchain Environment Packaging
+name: Build Clang 9 aarch64
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: 
 
 jobs:
-  package_env:
-    runs-on: ubuntu-latest
+  build:
+    runs-on: ubuntu-20.04 
 
     steps:
-    - name: Create Workspace Directory
-      run: mkdir -p $GITHUB_WORKSPACE/wildan_env
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Download Clang 9.0.3 (AOSP)
-      run: |
-        git clone https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 \
-          -b android-10.0.0_r47 \
-          --depth=1 \
-          $GITHUB_WORKSPACE/wildan_env/clang-9
-        rm -rf $GITHUB_WORKSPACE/wildan_env/clang-9/.git
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
-    - name: Download GCC 9.3 Toolchains
-      run: |
-        git clone https://github.com/mvaisakh/gcc-arm64 \
-          -b gcc9 \
-          --depth=1 \
-          $GITHUB_WORKSPACE/wildan_env/gcc9-64
-        git clone https://github.com/mvaisakh/gcc-arm \
-          -b gcc9 \
-          --depth=1 \
-          $GITHUB_WORKSPACE/wildan_env/gcc9-32
-        rm -rf $GITHUB_WORKSPACE/wildan_env/gcc9-64/.git \
-               $GITHUB_WORKSPACE/wildan_env/gcc9-32/.git
+      - name: Download LLVM 9 Source
+        run: |
+          wget https://github.com/llvm/llvm-project/releases/download/llvmorg-9.0.0/llvm-9.0.0.src.tar.xz
+          wget https://github.com/llvm/llvm-project/releases/download/llvmorg-9.0.0/clang-9.0.0.src.tar.xz
+          tar -xf llvm-9.0.0.src.tar.xz
+          tar -xf clang-9.0.0.src.tar.xz
+          mv clang-9.0.0.src llvm-9.0.0.src/tools/clang
 
-    - name: Generate Environment Setup Script
-      run: |
-        cat <<'EOF' > $GITHUB_WORKSPACE/wildan_env/setup_wildan.sh
-        export WILDAN_ROOT=$(pwd)
-        export PATH="$WILDAN_ROOT/clang-9/clang-r353983c1/bin:\
-        $WILDAN_ROOT/gcc9-64/bin:\
-        $WILDAN_ROOT/gcc9-32/bin:\
-        $PATH"
-        export ARCH=arm64
-        export SUBARCH=arm64
-        export KBUILD_BUILD_USER="Wildan"
-        export KBUILD_BUILD_HOST="Kaioken-Project"
-        echo "╔═══════════════════════════════════════╗"
-        echo "║         Toolchain Ready                      ║"
-        echo "║      (Clang 9.0.3 + GCC 9.3)                 ║"
-        echo "╚═══════════════════════════════════════╝"
-        EOF
-        chmod +x $GITHUB_WORKSPACE/wildan_env/setup_wildan.sh
+      - name: Configure CMake (Cross-Compile)
+        run: |
+          mkdir build && cd build
+          cmake -G Ninja ../llvm-9.0.0.src \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DLLVM_TARGETS_TO_BUILD="AArch64" \
+            -DLLVM_DEFAULT_TARGET_TRIPLE=aarch64-linux-gnu \
+            -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
+            -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
+            -DLLVM_ENABLE_PROJECTS="clang" \
+            -DCMAKE_INSTALL_PREFIX=./install_dir
 
-    - name: Create Compressed Archive
-      run: |
-        tar -czvf Wildan-Toolchain-Pack.tar.gz \
-          -C $GITHUB_WORKSPACE \
-          wildan_env
+      - name: Build with Ninja
+        run: |
+          cd build
+          ninja -j$(nproc)
 
-    - name: Upload Toolchain Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: Wildan-Toolchain-Package
-        path: Wildan-Toolchain-Pack.tar.gz
+      - name: Install and Package
+        run: |
+          cd build
+          ninja install
+          tar -czvf ../clang9-aarch64.tar.gz ./install_dir
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: clang9-binaries
+          path: clang9-aarch64.tar.gz
