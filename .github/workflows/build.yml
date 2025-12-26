@@ -1,4 +1,4 @@
-name: Build Clang 9 for Android ARM64
+name: Build Clang 9 for Linux AArch64
 
 on:
   workflow_dispatch:
@@ -42,16 +42,16 @@ jobs:
               -DLLVM_ENABLE_BACKTRACES=OFF \
               -DLLVM_INCLUDE_TESTS=OFF \
               -DLLVM_INCLUDE_EXAMPLES=OFF \
-              -DCMAKE_INSTALL_PREFIX=../clang9_arm64
+              -DCMAKE_INSTALL_PREFIX=../clang9_linux_aarch64
             ninja -j2
             ninja install
             
             cd ..
-            tar -czvf clang9-arm64-android.tar.gz clang9_arm64
+            tar -czvf clang9-linux-aarch64.tar.gz clang9_linux_aarch64
           "
 
       - name: Upload Result
         uses: actions/upload-artifact@v4
         with:
-          name: clang9-for-android-arm64
-          path: clang9-arm64-android.tar.gz
+          name: clang9-linux-aarch64
+          path: clang9-linux-aarch64.tar.gz
