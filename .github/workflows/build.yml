@@ -5,7 +5,7 @@ on:
 
 jobs:
   build:
-    runs-on: Ubuntu 22.04
+    runs-on: Ubuntu-latest
 
     steps:
       - name: Checkout code
