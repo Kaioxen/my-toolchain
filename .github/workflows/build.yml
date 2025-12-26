@@ -1,0 +1,64 @@
+name: Toolchain Environment Packaging
+
+on:
+  workflow_dispatch:
+
+jobs:
+  package_env:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Create Workspace Directory
+      run: mkdir -p $GITHUB_WORKSPACE/wildan_env
+
+    - name: Download Clang 9.0.3 (AOSP)
+      run: |
+        git clone https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 \
+          -b android-10.0.0_r47 \
+          --depth=1 \
+          $GITHUB_WORKSPACE/wildan_env/clang-9
+        rm -rf $GITHUB_WORKSPACE/wildan_env/clang-9/.git
+
+    - name: Download GCC 9.3 Toolchains
+      run: |
+        git clone https://github.com/mvaisakh/gcc-arm64 \
+          -b gcc9 \
+          --depth=1 \
+          $GITHUB_WORKSPACE/wildan_env/gcc9-64
+        git clone https://github.com/mvaisakh/gcc-arm \
+          -b gcc9 \
+          --depth=1 \
+          $GITHUB_WORKSPACE/wildan_env/gcc9-32
+        rm -rf $GITHUB_WORKSPACE/wildan_env/gcc9-64/.git \
+               $GITHUB_WORKSPACE/wildan_env/gcc9-32/.git
+
+    - name: Generate Environment Setup Script
+      run: |
+        cat <<'EOF' > $GITHUB_WORKSPACE/wildan_env/setup_wildan.sh
+        export WILDAN_ROOT=$(pwd)
+        export PATH="$WILDAN_ROOT/clang-9/clang-r353983c1/bin:\
+        $WILDAN_ROOT/gcc9-64/bin:\
+        $WILDAN_ROOT/gcc9-32/bin:\
+        $PATH"
+        export ARCH=arm64
+        export SUBARCH=arm64
+        export KBUILD_BUILD_USER="Wildan"
+        export KBUILD_BUILD_HOST="Kaioken-Project"
+        echo "╔═══════════════════════════════════════╗"
+        echo "║         Toolchain Ready                      ║"
+        echo "║      (Clang 9.0.3 + GCC 9.3)                 ║"
+        echo "╚═══════════════════════════════════════╝"
+        EOF
+        chmod +x $GITHUB_WORKSPACE/wildan_env/setup_wildan.sh
+
+    - name: Create Compressed Archive
+      run: |
+        tar -czvf Wildan-Toolchain-Pack.tar.gz \
+          -C $GITHUB_WORKSPACE \
+          wildan_env
+
+    - name: Upload Toolchain Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Wildan-Toolchain-Package
+        path: Wildan-Toolchain-Pack.tar.gz
