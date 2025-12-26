@@ -5,14 +5,17 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    container: ubuntu:18.04
+    runs-on: ubuntu-latest  # Runner menggunakan Ubuntu 22.04
+    #  container: ubuntu:18.04
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Install Dependencies
         run: |
-          apt-get update
-          apt-get install -y cmake ninja-build gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu xz-utils wget python3 build-essential git
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu xz-utils wget python3 build-essential git
 
       - name: Download LLVM 9 Source
         run: |
