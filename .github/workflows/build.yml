@@ -6,77 +6,52 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container:  # INI YANG DIUBAH
-      image: ubuntu:18.04
-
+    
     steps:
-      - name: Install Dependencies
+      - name: Build in Docker
         run: |
-          apt-get update
-          apt-get install -y cmake ninja-build gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu xz-utils wget python3 build-essential git
+          docker run --rm -v $(pwd):/workspace ubuntu:18.04 bash -c "
+            cd /workspace
+            
+            apt-get update
+            apt-get install -y cmake ninja-build gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu xz-utils wget python3 build-essential git
+            
+            wget https://releases.llvm.org/9.0.0/llvm-9.0.0.src.tar.xz
+            wget https://releases.llvm.org/9.0.0/cfe-9.0.0.src.tar.xz
+            tar -xf llvm-9.0.0.src.tar.xz
+            tar -xf cfe-9.0.0.src.tar.xz
+            mv cfe-9.0.0.src llvm-9.0.0.src/tools/clang
+            
+            mkdir build-host && cd build-host
+            cmake -G Ninja ../llvm-9.0.0.src \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DLLVM_TARGETS_TO_BUILD='X86'
+            ninja llvm-tblgen clang-tblgen
+            cd ..
+            
+            mkdir build && cd build
+            cmake -G Ninja ../llvm-9.0.0.src \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DLLVM_TARGETS_TO_BUILD='AArch64' \
+              -DLLVM_DEFAULT_TARGET_TRIPLE=aarch64-linux-gnu \
+              -DCMAKE_CROSSCOMPILING=True \
+              -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
+              -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
+              -DLLVM_TABLEGEN=\$(pwd)/../build-host/bin/llvm-tblgen \
+              -DCLANG_TABLEGEN=\$(pwd)/../build-host/bin/clang-tblgen \
+              -DLLVM_ENABLE_BACKTRACES=OFF \
+              -DLLVM_INCLUDE_TESTS=OFF \
+              -DLLVM_INCLUDE_EXAMPLES=OFF \
+              -DCMAKE_INSTALL_PREFIX=../clang9_arm64
+            ninja -j2
+            ninja install
+            
+            cd ..
+            tar -czvf clang9-arm64-android.tar.gz clang9_arm64
+          "
 
-      - name: Download LLVM 9 Source
-        run: |
-          wget https://releases.llvm.org/9.0.0/llvm-9.0.0.src.tar.xz
-          wget https://releases.llvm.org/9.0.0/cfe-9.0.0.src.tar.xz
-          tar -xf llvm-9.0.0.src.tar.xz
-          tar -xf cfe-9.0.0.src.tar.xz
-          mv cfe-9.0.0.src llvm-9.0.0.src/tools/clang
-
-      - name: Build Host TableGen (x86_64)
-        run: |
-          mkdir build-host && cd build-host
-          cmake -G Ninja ../llvm-9.0.0.src \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DLLVM_TARGETS_TO_BUILD="X86"
-          ninja llvm-tblgen clang-tblgen
-          cd ..
-
-      - name: Configure Cross-Compile (ARM64)
-        run: |
-          mkdir build && cd build
-          cmake -G Ninja ../llvm-9.0.0.src \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DLLVM_TARGETS_TO_BUILD="AArch64" \
-            -DLLVM_DEFAULT_TARGET_TRIPLE=aarch64-linux-gnu \
-            -DCMAKE_CROSSCOMPILING=True \
-            -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
-            -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
-            -DLLVM_TABLEGEN=$(pwd)/../build-host/bin/llvm-tblgen \
-            -DCLANG_TABLEGEN=$(pwd)/../build-host/bin/clang-tblgen \
-            -DLLVM_ENABLE_BACKTRACES=OFF \
-            -DLLVM_INCLUDE_TESTS=OFF \
-            -DLLVM_INCLUDE_EXAMPLES=OFF \
-            -DCMAKE_INSTALL_PREFIX=../clang9_arm64
-
-      - name: Build and Install
-        run: |
-          cd build
-          ninja -j2
-          ninja install
-
-      - name: Create Package
-        run: |
-          tar -czvf clang9-arm64-android.tar.gz clang9_arm64
-
-      - name: Copy artifact to shared directory
-        run: |
-          mkdir -p /github/home/artifacts
-          cp clang9-arm64-android.tar.gz /github/home/artifacts/
-
-  upload:  # JOB BARU
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: Download artifact from build job
-        run: |
-          mkdir -p artifact
-          # Karena kita tidak bisa pakai actions/download-artifact antar job di sini,
-          # kita gunakan curl untuk download dari URL
-          echo "Artifact akan diupload di step berikutnya"
-        
       - name: Upload Result
         uses: actions/upload-artifact@v4
         with:
           name: clang9-for-android-arm64
-          path: /github/home/artifacts/clang9-arm64-android.tar.gz
+          path: clang9-arm64-android.tar.gz
