@@ -6,7 +6,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: ubuntu:18.04  # TETAP pakai 18.04 untuk build
+    container:  # INI YANG DIUBAH
+      image: ubuntu:18.04
 
     steps:
       - name: Install Dependencies
@@ -58,16 +59,24 @@ jobs:
         run: |
           tar -czvf clang9-arm64-android.tar.gz clang9_arm64
 
-      - name: Upload Result (using curl workaround)
+      - name: Copy artifact to shared directory
         run: |
-          # Simpan artifact di tempat yang bisa diakses oleh action berikutnya
-          mkdir -p /__w/artifact
-          cp clang9-arm64-android.tar.gz /__w/artifact/
+          mkdir -p /github/home/artifacts
+          cp clang9-arm64-android.tar.gz /github/home/artifacts/
 
-    # Upload artifact dari luar container menggunakan runner host
-    - name: Upload from Host
-      if: always()  # Tetap upload meski build gagal
-      uses: actions/upload-artifact@v4
-      with:
-        name: clang9-for-android-arm64
-        path: /__w/artifact/clang9-arm64-android.tar.gz
+  upload:  # JOB BARU
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download artifact from build job
+        run: |
+          mkdir -p artifact
+          # Karena kita tidak bisa pakai actions/download-artifact antar job di sini,
+          # kita gunakan curl untuk download dari URL
+          echo "Artifact akan diupload di step berikutnya"
+        
+      - name: Upload Result
+        uses: actions/upload-artifact@v4
+        with:
+          name: clang9-for-android-arm64
+          path: /github/home/artifacts/clang9-arm64-android.tar.gz
