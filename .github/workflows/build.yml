@@ -5,17 +5,14 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest  # Runner menggunakan Ubuntu 22.04
-    #  container: ubuntu:18.04
+    runs-on: ubuntu-latest
+    container: ubuntu:18.04  # TETAP pakai 18.04 untuk build
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Install Dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake ninja-build gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu xz-utils wget python3 build-essential git
+          apt-get update
+          apt-get install -y cmake ninja-build gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu xz-utils wget python3 build-essential git
 
       - name: Download LLVM 9 Source
         run: |
@@ -27,7 +24,6 @@ jobs:
 
       - name: Build Host TableGen (x86_64)
         run: |
-          # Kita bikin tblgen versi PC dulu buat pembantu
           mkdir build-host && cd build-host
           cmake -G Ninja ../llvm-9.0.0.src \
             -DCMAKE_BUILD_TYPE=Release \
@@ -55,7 +51,6 @@ jobs:
       - name: Build and Install
         run: |
           cd build
-          # -j2 biar RAM aman
           ninja -j2
           ninja install
 
@@ -63,8 +58,16 @@ jobs:
         run: |
           tar -czvf clang9-arm64-android.tar.gz clang9_arm64
 
-      - name: Upload Result
-        uses: actions/upload-artifact@v4
-        with:
-          name: clang9-for-android-arm64
-          path: clang9-arm64-android.tar.gz
+      - name: Upload Result (using curl workaround)
+        run: |
+          # Simpan artifact di tempat yang bisa diakses oleh action berikutnya
+          mkdir -p /__w/artifact
+          cp clang9-arm64-android.tar.gz /__w/artifact/
+
+    # Upload artifact dari luar container menggunakan runner host
+    - name: Upload from Host
+      if: always()  # Tetap upload meski build gagal
+      uses: actions/upload-artifact@v4
+      with:
+        name: clang9-for-android-arm64
+        path: /__w/artifact/clang9-arm64-android.tar.gz
