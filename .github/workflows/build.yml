@@ -1,4 +1,4 @@
-name: Build Clang 9 aarch64 Debian
+name: Build Clang 9 aarch64 Legacy
 
 on:
   workflow_dispatch:
@@ -6,13 +6,15 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: debian:bullseye
+    container: ubuntu:18.04
 
     steps:
-      - name: Install Dependencies
+      - name: Prepare Ubuntu 18.04
         run: |
           apt-get update
-          apt-get install -y cmake ninja-build gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu xz-utils wget python3 python3-dev build-essential libxml2-dev libncurses5-dev zlib1g-dev swig libedit-dev libpython3-dev git curl
+          apt-get install -y software-properties-common
+          apt-get update
+          apt-get install -y cmake ninja-build gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu xz-utils wget python3 python3-dev build-essential git curl
 
       - name: Download LLVM 9 Source
         run: |
@@ -32,21 +34,17 @@ jobs:
             -DLLVM_DEFAULT_TARGET_TRIPLE=aarch64-linux-gnu \
             -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
             -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
-            -DCMAKE_CXX_STANDARD=14 \
-            -DCMAKE_CXX_FLAGS="-w -fpermissive" \
             -DPYTHON_EXECUTABLE=/usr/bin/python3 \
             -DLLVM_INCLUDE_TESTS=OFF \
             -DLLVM_INCLUDE_EXAMPLES=OFF \
             -DLLVM_ENABLE_BACKTRACES=OFF \
-            -DLLVM_ENABLE_LIBXML2=OFF \
-            -DLLVM_ENABLE_TERMINFO=OFF \
             -DCMAKE_INSTALL_PREFIX=../install_dir
 
       - name: Build and Install
         run: |
           cd build
-          # Menggunakan j2 untuk menghindari kehabisan RAM di GitHub Actions
-          ninja -j2
+          # Menggunakan j4 karena Ubuntu 18.04 lebih ringan pemakaian RAM-nya untuk GCC 7
+          ninja -j4
           ninja install
 
       - name: Strip Binaries
@@ -56,10 +54,10 @@ jobs:
       - name: Archive Binaries
         run: |
           cd install_dir
-          tar -czvf ../clang9-aarch64-debian.tar.gz .
+          tar -czvf ../clang9-aarch64-legacy.tar.gz .
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: clang9-debian-aarch64
-          path: clang9-aarch64-debian.tar.gz
+          name: clang9-legacy-aarch64
+          path: clang9-aarch64-legacy.tar.gz
