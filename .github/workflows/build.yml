@@ -32,6 +32,8 @@ jobs:
             -DLLVM_DEFAULT_TARGET_TRIPLE=aarch64-linux-gnu \
             -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
             -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
+            -DCMAKE_CXX_STANDARD=14 \
+            -DCMAKE_CXX_FLAGS="-w -fpermissive" \
             -DPYTHON_EXECUTABLE=/usr/bin/python3 \
             -DLLVM_INCLUDE_TESTS=OFF \
             -DLLVM_INCLUDE_EXAMPLES=OFF \
@@ -43,7 +45,8 @@ jobs:
       - name: Build and Install
         run: |
           cd build
-          ninja -j$(nproc)
+          # Menggunakan j2 untuk menghindari kehabisan RAM di GitHub Actions
+          ninja -j2
           ninja install
 
       - name: Strip Binaries
