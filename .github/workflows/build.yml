@@ -6,18 +6,13 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Kita pakai Ubuntu 18.04 karena ini "habitat asli" LLVM 9
     container: ubuntu:18.04
 
     steps:
-      - name: Install Native & Cross Dependencies
+      - name: Install Dependencies
         run: |
           apt-get update
-          apt-get install -y \
-            cmake ninja-build xz-utils wget python3 build-essential git \
-            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
-            binutils-aarch64-linux-gnu \
-            llvm-9-tools  # Ini penting supaya gak Exec format error
+          apt-get install -y cmake ninja-build gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu xz-utils wget python3 build-essential git
 
       - name: Download LLVM 9 Source
         run: |
@@ -27,7 +22,17 @@ jobs:
           tar -xf cfe-9.0.0.src.tar.xz
           mv cfe-9.0.0.src llvm-9.0.0.src/tools/clang
 
-      - name: Configure CMake
+      - name: Build Host TableGen (x86_64)
+        run: |
+          # Kita bikin tblgen versi PC dulu buat pembantu
+          mkdir build-host && cd build-host
+          cmake -G Ninja ../llvm-9.0.0.src \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DLLVM_TARGETS_TO_BUILD="X86"
+          ninja llvm-tblgen clang-tblgen
+          cd ..
+
+      - name: Configure Cross-Compile (ARM64)
         run: |
           mkdir build && cd build
           cmake -G Ninja ../llvm-9.0.0.src \
@@ -37,9 +42,8 @@ jobs:
             -DCMAKE_CROSSCOMPILING=True \
             -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
             -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
-            -DCMAKE_CXX_FLAGS="-w" \
-            -DLLVM_TABLEGEN=/usr/lib/llvm-9/bin/llvm-tblgen \
-            -DCLANG_TABLEGEN=/usr/lib/llvm-9/bin/llvm-tblgen \
+            -DLLVM_TABLEGEN=$(pwd)/../build-host/bin/llvm-tblgen \
+            -DCLANG_TABLEGEN=$(pwd)/../build-host/bin/clang-tblgen \
             -DLLVM_ENABLE_BACKTRACES=OFF \
             -DLLVM_INCLUDE_TESTS=OFF \
             -DLLVM_INCLUDE_EXAMPLES=OFF \
@@ -48,14 +52,12 @@ jobs:
       - name: Build and Install
         run: |
           cd build
-          # Pakai -j2 agar lebih stabil di RAM GitHub yang cuma 7GB
+          # -j2 biar RAM aman
           ninja -j2
           ninja install
 
       - name: Create Package
         run: |
-          # Hapus file yang gak perlu biar ringan
-          rm -rf clang9_arm64/lib/cmake
           tar -czvf clang9-arm64-android.tar.gz clang9_arm64
 
       - name: Upload Result
