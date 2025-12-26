@@ -1,30 +1,36 @@
 name: Build Clang 9 aarch64
 
 on:
-  workflow_dispatch: 
+  workflow_dispatch:
 
 jobs:
   build:
-    runs-on: Ubuntu-latest
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Dependencies
+      - name: Install Build Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+          sudo apt-get install -y cmake ninja-build \
+            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+            binutils-aarch64-linux-gnu xz-utils
 
       - name: Download LLVM 9 Source
         run: |
-          wget https://github.com/llvm/llvm-project/releases/download/llvmorg-9.0.0/llvm-9.0.0.src.tar.xz
-          wget https://github.com/llvm/llvm-project/releases/download/llvmorg-9.0.0/clang-9.0.0.src.tar.xz
+          # Menggunakan link resmi LLVM releases
+          wget https://releases.llvm.org/9.0.0/llvm-9.0.0.src.tar.xz
+          wget https://releases.llvm.org/9.0.0/cfe-9.0.0.src.tar.xz
+          
           tar -xf llvm-9.0.0.src.tar.xz
-          tar -xf clang-9.0.0.src.tar.xz
-          mv clang-9.0.0.src llvm-9.0.0.src/tools/clang
+          tar -xf cfe-9.0.0.src.tar.xz
+          
+          # Pindahkan Clang (cfe) ke dalam folder tools LLVM
+          mv cfe-9.0.0.src llvm-9.0.0.src/tools/clang
 
-      - name: Configure CMake (Cross-Compile)
+      - name: Configure CMake
         run: |
           mkdir build && cd build
           cmake -G Ninja ../llvm-9.0.0.src \
@@ -34,21 +40,23 @@ jobs:
             -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
             -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
             -DLLVM_ENABLE_PROJECTS="clang" \
-            -DCMAKE_INSTALL_PREFIX=./install_dir
+            -DLLVM_INCLUDE_TESTS=OFF \
+            -DLLVM_INCLUDE_EXAMPLES=OFF \
+            -DCMAKE_INSTALL_PREFIX=../clang9_aarch64_dist
 
-      - name: Build with Ninja
+      - name: Build and Install
         run: |
           cd build
           ninja -j$(nproc)
-
-      - name: Install and Package
-        run: |
-          cd build
           ninja install
-          tar -czvf ../clang9-aarch64.tar.gz ./install_dir
+
+      - name: Archive Binaries
+        run: |
+          # Kompres hasil build agar mudah di download
+          tar -czvf clang9-aarch64.tar.gz clang9_aarch64_dist/
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: clang9-binaries
+          name: clang9-aarch64-binaries
           path: clang9-aarch64.tar.gz
