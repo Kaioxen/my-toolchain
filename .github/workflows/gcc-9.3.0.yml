@@ -1,4 +1,4 @@
-name: Build GCC 9.3.0 Full Native AArch64
+name: Build GCC 9.3.0 Native AArch64 (Clean Version)
 
 on:
   workflow_dispatch:
@@ -6,7 +6,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    
     steps:
       - name: Build Toolchain
         run: |
@@ -16,61 +15,47 @@ jobs:
             apt-get install -y wget tar xz-utils build-essential \
                                gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
                                bison flex texinfo python3
-
-            # 1. VARIABLE SETUP
+            
             export PREFIX=/opt/gcc-9.3.0
-            export TARGET=aarch64-linux-gnu
-            export HOST=aarch64-linux-gnu
-            export BUILD=x86_64-linux-gnu
             mkdir -p src build-binutils build-gcc install_dir
 
-            # 2. DOWNLOAD SOURCES
+            # Download & Extract
             wget -q https://ftp.gnu.org/gnu/binutils/binutils-2.34.tar.xz
             wget -q https://ftp.gnu.org/gnu/gcc/gcc-9.3.0/gcc-9.3.0.tar.gz
-            
             tar -xf binutils-2.34.tar.xz -C src
             tar -xf gcc-9.3.0.tar.gz -C src
-            
-            # Download GCC Prerequisites (GMP, MPFR, MPC)
-            cd src/gcc-9.3.0
-            ./contrib/download_prerequisites
-            cd ../..
 
-            # 3. BUILD BINUTILS (as, ld, ar, nm, etc)
-            # Ini penting agar GCC punya 'as' dan 'ld' versi AArch64
+            # 1. Build Binutils (Cepat)
             cd build-binutils
-            ../src/binutils-2.34/configure \
-                --prefix=\$PREFIX \
-                --target=\$TARGET \
-                --host=\$HOST \
-                --build=\$BUILD \
-                --disable-nls \
-                --disable-werror
-            make -j\$(nproc)
-            make install DESTDIR=/workspace/install_dir
+            ../src/binutils-2.34/configure --prefix=\$PREFIX --target=aarch64-linux-gnu --host=aarch64-linux-gnu --disable-nls
+            make -j\$(nproc) && make install DESTDIR=/workspace/install_dir
             cd ..
 
-            # 4. BUILD GCC (The Core)
-            cd build-gcc
+            # 2. Build GCC (Berat - Ini jantungnya)
+            cd src/gcc-9.3.0
+            ./contrib/download_prerequisites
+            cd ../../build-gcc
             ../src/gcc-9.3.0/configure \
                 --prefix=\$PREFIX \
-                --target=\$TARGET \
-                --host=\$HOST \
-                --build=\$BUILD \
+                --target=aarch64-linux-gnu \
+                --host=aarch64-linux-gnu \
                 --enable-languages=c,c++ \
                 --disable-multilib \
-                --disable-nls \
                 --disable-bootstrap \
-                --with-system-zlib \
-                --enable-checking=release \
-                --with-binutils-pgm-path=/workspace/install_dir\$PREFIX/bin
+                --disable-nls
             
-            make -j\$(nproc)
-            make install-strip DESTDIR=/workspace/install_dir
+            # Pake && biar kalau make gagal, dia GAK AKAN lanjut ke install
+            make -j\$(nproc) && make install-strip DESTDIR=/workspace/install_dir
             
-            # 5. PACKAGING
-            cd /workspace/install_dir\$PREFIX
-            tar -czvf /workspace/gcc-9.3.0-aarch64.tar.gz .
+            # 3. VERIFIKASI (Biar Wildan gak dapet folder kosong lagi)
+            if [ -f /workspace/install_dir\$PREFIX/bin/aarch64-linux-gnu-gcc ]; then
+                echo 'MANTAP: GCC BERHASIL DIBUAT!'
+                cd /workspace/install_dir\$PREFIX
+                tar -czvf /workspace/gcc-9.3.0-aarch64.tar.gz .
+            else
+                echo 'WADUH: GCC GAGAL COMPILE! Cek Log di atas.'
+                exit 1
+            fi
           "
 
       - name: Upload Result
