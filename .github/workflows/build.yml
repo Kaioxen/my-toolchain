@@ -13,23 +13,29 @@ jobs:
           docker run --rm -v $(pwd):/workspace ubuntu:18.04 bash -c "
             cd /workspace
             
+            # Update dan install tools pendukung
             apt-get update
-            apt-get install -y cmake ninja-build gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu xz-utils wget python3 build-essential git
+            apt-get install -y cmake ninja-build gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+                               binutils-aarch64-linux-gnu xz-utils wget python3 build-essential git
             
-            # 1. Download Source (LLVM, Clang, dan POLLY)
-            wget https://releases.llvm.org/9.0.0/llvm-9.0.0.src.tar.xz
-            wget https://releases.llvm.org/9.0.0/cfe-9.0.0.src.tar.xz
-            wget https://releases.llvm.org/9.0.0/polly-9.0.0.src.tar.xz
+            # 1. Download semua source code resmi LLVM 9.0.0
+            echo 'Downloading sources...'
+            wget -q https://releases.llvm.org/9.0.0/llvm-9.0.0.src.tar.xz
+            wget -q https://releases.llvm.org/9.0.0/cfe-9.0.0.src.tar.xz
+            wget -q https://releases.llvm.org/9.0.0/polly-9.0.0.src.tar.xz
             
+            echo 'Extracting sources...'
             tar -xf llvm-9.0.0.src.tar.xz
             tar -xf cfe-9.0.0.src.tar.xz
             tar -xf polly-9.0.0.src.tar.xz
             
-            # 2. Susun Struktur Folder
+            # 2. Susun Struktur Folder (PENTING!)
+            # Di LLVM 9, Clang dan Polly ditaruh di dalam folder tools milik LLVM
             mv cfe-9.0.0.src llvm-9.0.0.src/tools/clang
             mv polly-9.0.0.src llvm-9.0.0.src/tools/polly
             
-            # 3. Build Host (Generator Tools)
+            # 3. Build Host (Generator Tools untuk X86)
+            # Dibutuhkan karena kita cross-compile (membangun AArch64 di mesin X86)
             mkdir build-host && cd build-host
             cmake -G Ninja ../llvm-9.0.0.src \
               -DCMAKE_BUILD_TYPE=Release \
@@ -37,7 +43,7 @@ jobs:
             ninja llvm-tblgen clang-tblgen
             cd ..
             
-            # 4. Build Clang AArch64 dengan POLLY aktif
+            # 4. Build Utama (Clang AArch64 dengan Polly Terintegrasi)
             mkdir build && cd build
             cmake -G Ninja ../llvm-9.0.0.src \
               -DCMAKE_BUILD_TYPE=Release \
@@ -49,15 +55,18 @@ jobs:
               -DLLVM_TABLEGEN=\$(pwd)/../build-host/bin/llvm-tblgen \
               -DCLANG_TABLEGEN=\$(pwd)/../build-host/bin/clang-tblgen \
               -DLLVM_POLLY_LINK_INTO_TOOLS=ON \
-              -DLLVM_ENABLE_PROJECTS='polly' \
               -DLLVM_INCLUDE_TESTS=OFF \
               -DLLVM_INCLUDE_EXAMPLES=OFF \
+              -DLLVM_ENABLE_ASSERTIONS=OFF \
               -DCMAKE_INSTALL_PREFIX=../clang9_linux_aarch64
-            
+          
+            echo 'Starting compilation...'
             ninja -j3
             ninja install
             
+            # 5. Packing hasil build
             cd ..
+            echo 'Compressing result...'
             tar -czvf clang9-linux-aarch64.tar.gz clang9_linux_aarch64
           "
 
