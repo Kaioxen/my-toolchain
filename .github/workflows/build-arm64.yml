@@ -37,10 +37,18 @@ jobs:
         cd fann/build
         make -j$(nproc)
 
+    - name: Prepare tarball directories
+      run: |
+        cd fann
+        mkdir -p fann_arm64/include
+        mkdir -p fann_arm64/lib
+        cp -r include/* fann_arm64/include/ || true
+        cp build/src/libfann* fann_arm64/lib/ || true
+
     - name: Create ARM64 tarball
       run: |
         cd fann
-        tar czvf fann_arm64.tar.gz build/src/.libs include examples
+        tar czvf fann_arm64.tar.gz fann_arm64
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
