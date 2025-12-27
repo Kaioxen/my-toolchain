@@ -1,0 +1,49 @@
+name: Build FANN ARM64
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-arm64:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y cmake make git qemu-user-static gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+    - name: Clone FANN
+      run: git clone https://github.com/libfann/fann.git
+
+    - name: Configure CMake for ARM64
+      run: |
+        cd fann
+        mkdir -p build && cd build
+        cmake .. \
+          -DCMAKE_SYSTEM_NAME=Linux \
+          -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+          -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
+          -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++
+
+    - name: Build FANN
+      run: |
+        cd fann/build
+        make -j$(nproc)
+
+    - name: Create ARM64 tarball
+      run: |
+        cd fann
+        tar czvf fann_arm64.tar.gz build/src/.libs include examples
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: fann_arm64
+        path: fann/fann_arm64.tar.gz
