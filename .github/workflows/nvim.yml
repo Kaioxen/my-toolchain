@@ -1,0 +1,42 @@
+name: Build Neovim 0.9.5 for AArch64
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Build Neovim in Docker
+        run: |
+          docker run --rm -v $(pwd):/workspace ubuntu:18.04 bash -c "
+            cd /workspace
+            
+            # 1. Install alat tempur
+            apt-get update
+            apt-get install -y ninja-build gettext cmake unzip curl build-essential git gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+            
+            # 2. Clone Neovim tag v0.9.5
+            git clone --depth 1 --branch v0.9.5 https://github.com/neovim/neovim
+            cd neovim
+
+            # 3. Build Dependencies Neovim untuk AArch64
+            # Ini bagian paling penting supaya LuaJIT dkk cocok buat HP
+            make CMAKE_BUILD_TYPE=Release \
+                 CMAKE_EXTRA_FLAGS='-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=aarch64 -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++' \
+                 CC=aarch64-linux-gnu-gcc \
+                 -j$(nproc)
+
+            # 4. Install ke folder workspace
+            make DESTDIR=/workspace/nvim-aarch64 install
+            
+            cd /workspace
+            tar -czvf nvim-0.9.5-aarch64.tar.gz nvim-aarch64
+          "
+
+      - name: Upload Neovim
+        uses: actions/upload-artifact@v4
+        with:
+          name: nvim-0.9.5-portable
+          path: nvim-0.9.5-aarch64.tar.gz
