@@ -1,4 +1,4 @@
-name: Build GCC 9.3.0 Native AArch64 (Clean Version)
+name: Build GCC 9.3.0 Full Native AArch64 (Stable)
 
 on:
   workflow_dispatch:
@@ -7,6 +7,12 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Free Disk Space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf "/usr/local/share/boost"
+
       - name: Build Toolchain
         run: |
           docker run --rm -v $(pwd):/workspace ubuntu:18.04 bash -c "
@@ -19,19 +25,19 @@ jobs:
             export PREFIX=/opt/gcc-9.3.0
             mkdir -p src build-binutils build-gcc install_dir
 
-            # Download & Extract
+            # Download
             wget -q https://ftp.gnu.org/gnu/binutils/binutils-2.34.tar.xz
             wget -q https://ftp.gnu.org/gnu/gcc/gcc-9.3.0/gcc-9.3.0.tar.gz
             tar -xf binutils-2.34.tar.xz -C src
             tar -xf gcc-9.3.0.tar.gz -C src
 
-            # 1. Build Binutils (Cepat)
+            # 1. Build Binutils
             cd build-binutils
             ../src/binutils-2.34/configure --prefix=\$PREFIX --target=aarch64-linux-gnu --host=aarch64-linux-gnu --disable-nls
-            make -j\$(nproc) && make install DESTDIR=/workspace/install_dir
+            make -j2 && make install DESTDIR=/workspace/install_dir
             cd ..
 
-            # 2. Build GCC (Berat - Ini jantungnya)
+            # 2. Build GCC (The Real Challenge)
             cd src/gcc-9.3.0
             ./contrib/download_prerequisites
             cd ../../build-gcc
@@ -42,24 +48,24 @@ jobs:
                 --enable-languages=c,c++ \
                 --disable-multilib \
                 --disable-bootstrap \
-                --disable-nls
+                --disable-nls \
+                --with-system-zlib
             
-            # Pake && biar kalau make gagal, dia GAK AKAN lanjut ke install
-            make -j\$(nproc) && make install-strip DESTDIR=/workspace/install_dir
+            # PAKAI J1 BIAR STABIL
+            make -j1
+            make install-strip DESTDIR=/workspace/install_dir
             
-            # 3. VERIFIKASI (Biar Wildan gak dapet folder kosong lagi)
+            # Packing
             if [ -f /workspace/install_dir\$PREFIX/bin/aarch64-linux-gnu-gcc ]; then
-                echo 'MANTAP: GCC BERHASIL DIBUAT!'
                 cd /workspace/install_dir\$PREFIX
-                tar -czvf /workspace/gcc-9.3.0-aarch64.tar.gz .
+                tar -czvf /workspace/gcc-9.3.0-aarch64-FULL.tar.gz .
             else
-                echo 'WADUH: GCC GAGAL COMPILE! Cek Log di atas.'
                 exit 1
             fi
           "
 
-      - name: Upload Result
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: gcc-9.3.0-aarch64-native
-          path: gcc-9.3.0-aarch64.tar.gz
+          name: gcc-9.3.0-aarch64-FULL
+          path: gcc-9.3.0-aarch64-FULL.tar.gz
