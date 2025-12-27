@@ -1,4 +1,4 @@
-name: Build GCC 9.3.0 Native AArch64
+name: Build GCC 9.3.0 Full Native AArch64
 
 on:
   workflow_dispatch:
@@ -8,55 +8,73 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Build GCC in Docker
+      - name: Build Toolchain
         run: |
-          # Kita pakai Ubuntu 18.04 di dalam Docker sesuai permintaan lu
           docker run --rm -v $(pwd):/workspace ubuntu:18.04 bash -c "
             cd /workspace
-            
-            # Install dependencies untuk nge-build GCC
             apt-get update
             apt-get install -y wget tar xz-utils build-essential \
                                gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
-                               bison flex libgmp-dev libmpfr-dev libmpc-dev texinfo
+                               bison flex texinfo python3
 
-            # Download Source GCC 9.3.0
-            wget https://ftp.gnu.org/gnu/gcc/gcc-9.3.0/gcc-9.3.0.tar.gz
-            tar -xf gcc-9.3.0.tar.gz
-            cd gcc-9.3.0
-            # Download library pendukung (GMP, MPFR, MPC) internal
+            # 1. VARIABLE SETUP
+            export PREFIX=/opt/gcc-9.3.0
+            export TARGET=aarch64-linux-gnu
+            export HOST=aarch64-linux-gnu
+            export BUILD=x86_64-linux-gnu
+            mkdir -p src build-binutils build-gcc install_dir
+
+            # 2. DOWNLOAD SOURCES
+            wget -q https://ftp.gnu.org/gnu/binutils/binutils-2.34.tar.xz
+            wget -q https://ftp.gnu.org/gnu/gcc/gcc-9.3.0/gcc-9.3.0.tar.gz
+            
+            tar -xf binutils-2.34.tar.xz -C src
+            tar -xf gcc-9.3.0.tar.gz -C src
+            
+            # Download GCC Prerequisites (GMP, MPFR, MPC)
+            cd src/gcc-9.3.0
             ./contrib/download_prerequisites
+            cd ../..
+
+            # 3. BUILD BINUTILS (as, ld, ar, nm, etc)
+            # Ini penting agar GCC punya 'as' dan 'ld' versi AArch64
+            cd build-binutils
+            ../src/binutils-2.34/configure \
+                --prefix=\$PREFIX \
+                --target=\$TARGET \
+                --host=\$HOST \
+                --build=\$BUILD \
+                --disable-nls \
+                --disable-werror
+            make -j\$(nproc)
+            make install DESTDIR=/workspace/install_dir
             cd ..
 
-            # Bikin folder build
-            mkdir build && cd build
+            # 4. BUILD GCC (The Core)
+            cd build-gcc
+            ../src/gcc-9.3.0/configure \
+                --prefix=\$PREFIX \
+                --target=\$TARGET \
+                --host=\$HOST \
+                --build=\$BUILD \
+                --enable-languages=c,c++ \
+                --disable-multilib \
+                --disable-nls \
+                --disable-bootstrap \
+                --with-system-zlib \
+                --enable-checking=release \
+                --with-binutils-pgm-path=/workspace/install_dir\$PREFIX/bin
             
-            # Konfigurasi:
-            # --host=aarch64-linux-gnu artinya: Hasil akhirnya buat jalan di ARM64
-            # --target=aarch64-linux-gnu artinya: Dia bisa compile kode buat ARM64
-            ../gcc-9.3.0/configure \
-              --prefix=/opt/gcc-9.3.0 \
-              --target=aarch64-linux-gnu \
-              --host=aarch64-linux-gnu \
-              --build=x86_64-linux-gnu \
-              --enable-languages=c,c++ \
-              --disable-multilib \
-              --disable-nls \
-              --with-system-zlib
-
-            # Proses compile (Pake -j$(nproc) biar ngebut pake semua core GitHub)
             make -j\$(nproc)
+            make install-strip DESTDIR=/workspace/install_dir
             
-            # Install ke folder sementara
-            make install-strip DESTDIR=\$(pwd)/../install_dir
-            
-            # Packing hasil akhirnya
-            cd ../install_dir/opt/gcc-9.3.0
-            tar -czvf /workspace/gcc9-linux-aarch64.tar.gz .
+            # 5. PACKAGING
+            cd /workspace/install_dir\$PREFIX
+            tar -czvf /workspace/gcc-9.3.0-aarch64.tar.gz .
           "
 
       - name: Upload Result
         uses: actions/upload-artifact@v4
         with:
-          name: gcc9-linux-aarch64
-          path: gcc9-linux-aarch64.tar.gz
+          name: gcc-9.3.0-aarch64-native
+          path: gcc-9.3.0-aarch64.tar.gz
