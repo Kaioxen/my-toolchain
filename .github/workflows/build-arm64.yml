@@ -40,10 +40,15 @@ jobs:
     - name: Prepare full tarball
       run: |
         cd fann
-        mkdir -p fann_arm64_full
-        cp -r include fann_arm64_full/
-        cp -r build/src fann_arm64_full/
-        cp -r examples fann_arm64_full/
+        mkdir -p fann_arm64_full/lib
+        mkdir -p fann_arm64_full/include
+        # copy headers dari src
+        cp -r src/*.h fann_arm64_full/include/ || true
+        cp -r src/*.hpp fann_arm64_full/include/ || true
+        # copy library hasil build
+        cp build/src/libfann* fann_arm64_full/lib/ || true
+        # copy tests/examples opsional
+        cp -r tests fann_arm64_full/ || true
 
     - name: Create full ARM64 tarball
       run: |
