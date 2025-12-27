@@ -1,4 +1,4 @@
-name: Build Clang 9 for Linux AArch64
+name: Build GCC 9.3.0 for AArch64
 
 on:
   workflow_dispatch:
@@ -8,50 +8,56 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Build in Docker
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build GCC in Docker
         run: |
           docker run --rm -v $(pwd):/workspace ubuntu:18.04 bash -c "
             cd /workspace
             
+            # Install dependencies dasar
             apt-get update
-            apt-get install -y cmake ninja-build gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu xz-utils wget python3 build-essential git
+            apt-get install -y wget xz-utils build-essential libgmp-dev libmpfr-dev libmpc-dev flex bison texinfo
             
-            wget https://releases.llvm.org/9.0.0/llvm-9.0.0.src.tar.xz
-            wget https://releases.llvm.org/9.0.0/cfe-9.0.0.src.tar.xz
-            tar -xf llvm-9.0.0.src.tar.xz
-            tar -xf cfe-9.0.0.src.tar.xz
-            mv cfe-9.0.0.src llvm-9.0.0.src/tools/clang
+            # Download GCC 9.3.0
+            wget -q https://ftpmirror.gnu.org/gcc/gcc-9.3.0/gcc-9.3.0.tar.xz
+            tar -xf gcc-9.3.0.tar.xz
+            cd gcc-9.3.0
             
-            mkdir build-host && cd build-host
-            cmake -G Ninja ../llvm-9.0.0.src \
-              -DCMAKE_BUILD_TYPE=Release \
-              -DLLVM_TARGETS_TO_BUILD='X86'
-            ninja llvm-tblgen clang-tblgen
+            # Download bumbu tambahan (prerequisites)
+            ./contrib/download_prerequisites
             cd ..
             
-            mkdir build && cd build
-            cmake -G Ninja ../llvm-9.0.0.src \
-              -DCMAKE_BUILD_TYPE=Release \
-              -DLLVM_TARGETS_TO_BUILD='AArch64' \
-              -DLLVM_DEFAULT_TARGET_TRIPLE=aarch64-linux-gnu \
-              -DCMAKE_CROSSCOMPILING=True \
-              -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
-              -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
-              -DLLVM_TABLEGEN=\$(pwd)/../build-host/bin/llvm-tblgen \
-              -DCLANG_TABLEGEN=\$(pwd)/../build-host/bin/clang-tblgen \
-              -DLLVM_ENABLE_BACKTRACES=OFF \
-              -DLLVM_INCLUDE_TESTS=OFF \
-              -DLLVM_INCLUDE_EXAMPLES=OFF \
-              -DCMAKE_INSTALL_PREFIX=../clang9_linux_aarch64
-            ninja -j2
-            ninja install
+            # Buat folder build agar source tetap bersih
+            mkdir -p build-gcc && cd build-gcc
+            
+            # Konfigurasi GCC 9.3.0 (Sesuai spek kernel Android 4.9)
+            ../gcc-9.3.0/configure \
+              --prefix=/workspace/gcc-9.3-aarch64 \
+              --target=aarch64-linux-gnu \
+              --enable-languages=c,c++ \
+              --with-arch=armv8-a \
+              --disable-multilib \
+              --disable-nls \
+              --disable-libcc1 \
+              --disable-libsanitizer \
+              --disable-bootstrap \
+              --disable-threads \
+              --without-headers \
+              --with-newlib
+            
+            # Compile (GitHub Actions punya 2 core kencang)
+            make -j$(nproc)
+            make install
             
             cd ..
-            tar -czvf clang9-linux-aarch64.tar.gz clang9_linux_aarch64
+            # Kompres hasil build
+            tar -czvf gcc-9.3-linux-aarch64.tar.gz gcc-9.3-aarch64
           "
 
-      - name: Upload Result
+      - name: Upload GCC Result
         uses: actions/upload-artifact@v4
         with:
-          name: clang9-linux-aarch64
-          path: clang9-linux-aarch64.tar.gz
+          name: gcc-9.3-aarch64-toolchain
+          path: gcc-9.3-linux-aarch64.tar.gz
