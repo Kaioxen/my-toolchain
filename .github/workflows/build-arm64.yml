@@ -1,4 +1,4 @@
-name: Build FANN ARM64
+name: Build FANN ARM64 Full
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-arm64:
+  build-arm64-full:
     runs-on: ubuntu-latest
 
     steps:
@@ -37,21 +37,21 @@ jobs:
         cd fann/build
         make -j$(nproc)
 
-    - name: Prepare tarball directories
+    - name: Prepare full tarball
       run: |
         cd fann
-        mkdir -p fann_arm64/include
-        mkdir -p fann_arm64/lib
-        cp -r include/* fann_arm64/include/ || true
-        cp build/src/libfann* fann_arm64/lib/ || true
+        mkdir -p fann_arm64_full
+        cp -r include fann_arm64_full/
+        cp -r build/src fann_arm64_full/
+        cp -r examples fann_arm64_full/
 
-    - name: Create ARM64 tarball
+    - name: Create full ARM64 tarball
       run: |
         cd fann
-        tar czvf fann_arm64.tar.gz fann_arm64
+        tar czvf fann_arm64_full.tar.gz fann_arm64_full
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: fann_arm64
-        path: fann/fann_arm64.tar.gz
+        name: fann_arm64_full
+        path: fann/fann_arm64_full.tar.gz
