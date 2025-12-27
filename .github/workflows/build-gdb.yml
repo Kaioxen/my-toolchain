@@ -1,0 +1,56 @@
+name: Build GDB for AArch64
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build GDB in Docker
+        run: |
+          docker run --rm -v $(pwd):/workspace ubuntu:18.04 bash -c "
+            cd /workspace
+            
+            # Install dependencies untuk build GDB
+            apt-get update
+            apt-get install -y wget xz-utils build-essential texinfo libncurses5-dev python3-dev
+            
+            # Download GDB versi 11.1 (Stabil untuk AArch64)
+            wget -q https://ftpmirror.gnu.org/gdb/gdb-11.1.tar.xz
+            tar -xf gdb-11.1.tar.xz
+            cd gdb-11.1
+            
+            # Buat folder build
+            mkdir -p build && cd build
+            
+            # Konfigurasi GDB untuk AArch64 Linux
+            # Kita build 'Native' agar bisa jalan langsung di dalam chroot HP kamu
+            ../configure \
+              --prefix=/workspace/gdb-aarch64 \
+              --target=aarch64-linux-gnu \
+              --host=aarch64-linux-gnu \
+              --with-python=python3 \
+              --disable-werror
+            
+            # Karena kita cross-compile GDB agar jalan DI HP, 
+            # kita butuh cross-compiler GCC yang sudah ada di Ubuntu 18.04
+            apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+            
+            # Mulai Compile
+            make -j$(nproc) LDFLAGS='-static' # Kita buat static agar tidak kurang library di HP
+            make install
+            
+            cd /workspace
+            tar -czvf gdb-aarch64-portable.tar.gz gdb-aarch64
+          "
+
+      - name: Upload GDB Result
+        uses: actions/upload-artifact@v4
+        with:
+          name: gdb-aarch64-tool
+          path: gdb-aarch64-portable.tar.gz
